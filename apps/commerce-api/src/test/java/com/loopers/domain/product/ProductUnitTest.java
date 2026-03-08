@@ -89,4 +89,55 @@ class ProductUnitTest {
             assertThat(product.getStockQuantity().value()).isEqualTo(8);
         }
     }
+
+    @DisplayName("좋아요 수를 증가할 때,")
+    @Nested
+    class IncreaseLikeCount {
+
+        @DisplayName("increaseLikeCount를 호출하면, 좋아요 수가 1 증가한다.")
+        @Test
+        void increasesLikeCount_byOne() {
+            // arrange
+            Product product = new Product(1L, "상품A", 10000L, "설명", 10);
+
+            // act
+            product.increaseLikeCount();
+
+            // assert
+            assertThat(product.getLikeCount()).isEqualTo(1);
+        }
+    }
+
+    @DisplayName("좋아요 수를 감소할 때,")
+    @Nested
+    class DecreaseLikeCount {
+
+        @DisplayName("좋아요 수가 1 이상이면, 1 감소한다.")
+        @Test
+        void decreasesLikeCount_byOne() {
+            // arrange
+            Product product = new Product(1L, "상품A", 10000L, "설명", 10);
+            product.increaseLikeCount();
+
+            // act
+            product.decreaseLikeCount();
+
+            // assert
+            assertThat(product.getLikeCount()).isEqualTo(0);
+        }
+
+        @DisplayName("좋아요 수가 0일 때 감소하면, BAD_REQUEST 예외가 발생한다.")
+        @Test
+        void throwsException_whenLikeCountIsZero() {
+            // arrange
+            Product product = new Product(1L, "상품A", 10000L, "설명", 10);
+
+            // act
+            CoreException result = assertThrows(CoreException.class, () ->
+                product.decreaseLikeCount());
+
+            // assert
+            assertThat(result.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
+        }
+    }
 }
