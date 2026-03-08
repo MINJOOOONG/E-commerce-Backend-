@@ -5,6 +5,7 @@ import com.loopers.domain.product.ProductService;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -18,6 +19,7 @@ public class ProductFacade {
 
     private final ProductService productService;
 
+    @Cacheable(cacheNames = "product", key = "#productId")
     @Transactional(readOnly = true)
     public ProductInfo getProduct(Long productId) {
         Product product = productService.getProductById(productId);

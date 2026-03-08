@@ -4,6 +4,7 @@ import com.loopers.domain.product.Product;
 import com.loopers.infrastructure.product.ProductJpaRepository;
 import com.loopers.interfaces.api.ApiResponse;
 import com.loopers.utils.DatabaseCleanUp;
+import com.loopers.utils.RedisCleanUp;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -13,6 +14,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -32,9 +34,13 @@ class ProductV1ApiE2ETest {
     @Autowired
     private DatabaseCleanUp databaseCleanUp;
 
+    @Autowired
+    private RedisCleanUp redisCleanUp;
+
     @AfterEach
     void tearDown() {
         databaseCleanUp.truncateAllTables();
+        redisCleanUp.truncateAll();
     }
 
     private Product saveProduct(Long brandId, String name, Long price, String description, Integer stock) {
@@ -193,6 +199,109 @@ class ProductV1ApiE2ETest {
                 () -> assertThat(data.page().size()).isEqualTo(2),
                 () -> assertThat(data.page().totalElements()).isEqualTo(5),
                 () -> assertThat(data.page().totalPages()).isEqualTo(3)
+            );
+        }
+    }
+
+    @DisplayName("상품 상세 조회 캐시 정합성")
+    @Nested
+    class ProductDetailCacheConsistency {
+
+        private final ParameterizedTypeReference<ApiResponse<ProductV1Dto.ProductResponse>> productResponseType =
+            new ParameterizedTypeReference<>() {};
+
+        private ResponseEntity<ApiResponse<ProductV1Dto.ProductResponse>> getProduct(Long productId) {
+            return testRestTemplate.exchange(
+                "/api/v1/products/" + productId, HttpMethod.GET, new HttpEntity<>(null), productResponseType);
+        }
+
+        private void likeProduct(Long userId, Long productId) {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("X-Loopers-UserId", String.valueOf(userId));
+            testRestTemplate.exchange(
+                "/api/v1/products/" + productId + "/likes", HttpMethod.POST, new HttpEntity<>(null, headers),
+                new ParameterizedTypeReference<ApiResponse<Object>>() {});
+        }
+
+        private void unlikeProduct(Long userId, Long productId) {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("X-Loopers-UserId", String.valueOf(userId));
+            testRestTemplate.exchange(
+                "/api/v1/products/" + productId + "/likes", HttpMethod.DELETE, new HttpEntity<>(null, headers),
+                new ParameterizedTypeReference<ApiResponse<Object>>() {});
+        }
+
+        @DisplayName("좋아요 등록 후 재조회하면, 캐시가 무효화되어 증가된 likeCount를 반환한다.")
+        @Test
+        void returnsUpdatedLikeCount_afterLike() {
+            // arrange
+            Product saved = saveProduct(1L, "캐시 테스트 상품", 10000L, "설명", 50);
+
+            // act - 1차 조회 (캐시 저장)
+            ResponseEntity<ApiResponse<ProductV1Dto.ProductResponse>> firstResponse = getProduct(saved.getId());
+            assertThat(firstResponse.getBody().data().likeCount()).isEqualTo(0);
+
+            // act - 좋아요 등록 (캐시 evict)
+            likeProduct(1L, saved.getId());
+
+            // act - 2차 조회 (캐시 miss → DB에서 최신 데이터 조회)
+            ResponseEntity<ApiResponse<ProductV1Dto.ProductResponse>> secondResponse = getProduct(saved.getId());
+
+            // assert
+            assertAll(
+                () -> assertThat(secondResponse.getStatusCode().is2xxSuccessful()).isTrue(),
+                () -> assertThat(secondResponse.getBody().data().likeCount()).isEqualTo(1)
+            );
+        }
+
+        @DisplayName("좋아요 취소 후 재조회하면, 캐시가 무효화되어 감소된 likeCount를 반환한다.")
+        @Test
+        void returnsUpdatedLikeCount_afterUnlike() {
+            // arrange
+            Product saved = saveProduct(1L, "캐시 테스트 상품", 10000L, "설명", 50);
+            likeProduct(1L, saved.getId());
+
+            // act - 1차 조회 (캐시 저장, likeCount = 1)
+            ResponseEntity<ApiResponse<ProductV1Dto.ProductResponse>> firstResponse = getProduct(saved.getId());
+            assertThat(firstResponse.getBody().data().likeCount()).isEqualTo(1);
+
+            // act - 좋아요 취소 (캐시 evict)
+            unlikeProduct(1L, saved.getId());
+
+            // act - 2차 조회 (캐시 miss → DB에서 최신 데이터 조회)
+            ResponseEntity<ApiResponse<ProductV1Dto.ProductResponse>> secondResponse = getProduct(saved.getId());
+
+            // assert
+            assertAll(
+                () -> assertThat(secondResponse.getStatusCode().is2xxSuccessful()).isTrue(),
+                () -> assertThat(secondResponse.getBody().data().likeCount()).isEqualTo(0)
+            );
+        }
+
+        @DisplayName("여러 사용자가 좋아요 등록/취소 후에도, 재조회 시 정확한 likeCount를 반환한다.")
+        @Test
+        void returnsAccurateLikeCount_afterMultipleLikesAndUnlikes() {
+            // arrange
+            Product saved = saveProduct(1L, "캐시 테스트 상품", 10000L, "설명", 50);
+
+            // act - 3명이 좋아요
+            likeProduct(1L, saved.getId());
+            likeProduct(2L, saved.getId());
+            likeProduct(3L, saved.getId());
+
+            ResponseEntity<ApiResponse<ProductV1Dto.ProductResponse>> afterLikes = getProduct(saved.getId());
+            assertThat(afterLikes.getBody().data().likeCount()).isEqualTo(3);
+
+            // act - 1명 취소
+            unlikeProduct(2L, saved.getId());
+
+            // act - 재조회
+            ResponseEntity<ApiResponse<ProductV1Dto.ProductResponse>> afterUnlike = getProduct(saved.getId());
+
+            // assert
+            assertAll(
+                () -> assertThat(afterUnlike.getStatusCode().is2xxSuccessful()).isTrue(),
+                () -> assertThat(afterUnlike.getBody().data().likeCount()).isEqualTo(2)
             );
         }
     }

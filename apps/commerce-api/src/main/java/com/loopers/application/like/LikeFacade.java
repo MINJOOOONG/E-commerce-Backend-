@@ -8,6 +8,7 @@ import com.loopers.domain.product.ProductRepository;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +22,7 @@ public class LikeFacade {
     private final LikeRepository likeRepository;
     private final ProductRepository productRepository;
 
+    @CacheEvict(cacheNames = "product", key = "#productId")
     @Transactional
     public LikeInfo like(Long userId, Long productId) {
         Product product = getProductWithLock(productId);
@@ -35,6 +37,7 @@ public class LikeFacade {
         return LikeInfo.from(like);
     }
 
+    @CacheEvict(cacheNames = "product", key = "#productId")
     @Transactional
     public void unlike(Long userId, Long productId) {
         Product product = getProductWithLock(productId);
