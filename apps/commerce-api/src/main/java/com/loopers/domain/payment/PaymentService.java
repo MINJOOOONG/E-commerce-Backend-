@@ -3,11 +3,13 @@ package com.loopers.domain.payment;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 
 import java.time.ZonedDateTime;
 import java.util.List;
 
 @RequiredArgsConstructor
+@Component
 public class PaymentService {
 
     private final PaymentRepository paymentRepository;
