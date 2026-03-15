@@ -47,4 +47,11 @@ public class User extends BaseEntity {
     public Long getPoint() {
         return point;
     }
+
+    public void refundPoint(long amount) {
+        if (amount < 1) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "환불 포인트는 1 이상이어야 합니다");
+        }
+        this.point += amount;
+    }
 }

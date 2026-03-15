@@ -75,4 +75,12 @@ public class UserCoupon extends BaseEntity {
         return this.status == CouponStatus.AVAILABLE
             && ZonedDateTime.now().isBefore(this.expiredAt);
     }
+
+    public void restore() {
+        if (this.status == CouponStatus.AVAILABLE) {
+            return;
+        }
+        this.status = CouponStatus.AVAILABLE;
+        this.usedAt = null;
+    }
 }

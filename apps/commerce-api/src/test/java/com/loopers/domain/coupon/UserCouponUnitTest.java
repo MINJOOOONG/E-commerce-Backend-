@@ -60,6 +60,41 @@ class UserCouponUnitTest {
         }
     }
 
+    @DisplayName("쿠폰을 복구할 때,")
+    @Nested
+    class Restore {
+
+        @DisplayName("USED 상태이면, AVAILABLE로 복구되고 usedAt이 초기화된다.")
+        @Test
+        void restoresToAvailable_whenUsed() {
+            // arrange
+            UserCoupon coupon = new UserCoupon(1L, 1L, 30);
+            coupon.use();
+
+            // act
+            coupon.restore();
+
+            // assert
+            assertAll(
+                () -> assertThat(coupon.getStatus()).isEqualTo(CouponStatus.AVAILABLE),
+                () -> assertThat(coupon.getUsedAt()).isNull()
+            );
+        }
+
+        @DisplayName("이미 AVAILABLE 상태이면, 상태가 유지된다. (멱등)")
+        @Test
+        void remainsAvailable_whenAlreadyAvailable() {
+            // arrange
+            UserCoupon coupon = new UserCoupon(1L, 1L, 30);
+
+            // act
+            coupon.restore();
+
+            // assert
+            assertThat(coupon.getStatus()).isEqualTo(CouponStatus.AVAILABLE);
+        }
+    }
+
     @DisplayName("쿠폰 사용 가능 여부를 확인할 때,")
     @Nested
     class IsUsable {
