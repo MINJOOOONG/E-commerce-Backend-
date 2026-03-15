@@ -8,6 +8,7 @@ class FakePgClient implements PgClient {
 
     private boolean shouldFail = false;
     private boolean shouldThrow = false;
+    private Boolean queryResult = null;
 
     void setShouldFail(boolean shouldFail) {
         this.shouldFail = shouldFail;
@@ -15,6 +16,10 @@ class FakePgClient implements PgClient {
 
     void setShouldThrow(boolean shouldThrow) {
         this.shouldThrow = shouldThrow;
+    }
+
+    void setQueryResult(Boolean success) {
+        this.queryResult = success;
     }
 
     @Override
@@ -30,6 +35,10 @@ class FakePgClient implements PgClient {
 
     @Override
     public PgPaymentResponse queryPaymentStatus(String pgTransactionId) {
+        if (queryResult != null) {
+            return new PgPaymentResponse(queryResult, pgTransactionId,
+                queryResult ? "APPROVED" : "PAYMENT_NOT_FOUND");
+        }
         return new PgPaymentResponse(true, pgTransactionId, "APPROVED");
     }
 
