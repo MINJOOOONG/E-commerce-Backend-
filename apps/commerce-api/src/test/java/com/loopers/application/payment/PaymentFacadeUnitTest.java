@@ -52,7 +52,7 @@ class PaymentFacadeUnitTest {
         PaymentTransactionService txService = new PaymentTransactionService(
             paymentService, orderRepository, productRepository, userRepository, userCouponRepository
         );
-        paymentFacade = new PaymentFacade(txService, fakePgClient);
+        paymentFacade = new PaymentFacade(txService, paymentService, fakePgClient);
     }
 
     private Order createOrderWithItems(Long userId, Long productId) {
@@ -147,6 +147,87 @@ class PaymentFacadeUnitTest {
 
             // assert
             assertThat(result.getErrorType()).isEqualTo(ErrorType.CONFLICT);
+        }
+    }
+
+    @DisplayName("PG callback을 처리할 때,")
+    @Nested
+    class HandlePgCallback {
+
+        @DisplayName("성공 callback이면, Payment는 APPROVED, Order는 PAID가 된다.")
+        @Test
+        void approvesPayment_whenCallbackSuccess() {
+            // arrange
+            Order order = createOrderWithItems(1L, 1L);
+            PaymentInfo requested = paymentFacade.requestPayment(order.getId(), PaymentMethod.CARD);
+
+            // act
+            PaymentInfo result = paymentFacade.handlePgCallback(
+                requested.pgTransactionId(), true, "APPROVED"
+            );
+
+            // assert
+            assertAll(
+                () -> assertThat(result.status()).isEqualTo(PaymentStatus.APPROVED),
+                () -> assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID)
+            );
+        }
+
+        @DisplayName("실패 callback이면, Payment는 FAILED, Order는 CANCELLED이고 보상 처리된다.")
+        @Test
+        void failsPayment_whenCallbackFails() {
+            // arrange
+            Order order = createOrderWithItems(1L, 1L);
+            PaymentInfo requested = paymentFacade.requestPayment(order.getId(), PaymentMethod.CARD);
+
+            // act
+            PaymentInfo result = paymentFacade.handlePgCallback(
+                requested.pgTransactionId(), false, "CARD_DECLINED"
+            );
+
+            // assert
+            assertAll(
+                () -> assertThat(result.status()).isEqualTo(PaymentStatus.FAILED),
+                () -> assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED),
+                () -> assertThat(userRepository.findById(1L).get().getPoint())
+                    .as("포인트 환불").isEqualTo(100000L),
+                () -> assertThat(productRepository.findById(1L).get().getStockQuantity().value())
+                    .as("재고 복구").isEqualTo(10)
+            );
+        }
+
+        @DisplayName("이미 APPROVED 상태이면, 중복 callback을 무시하고 현재 상태를 반환한다.")
+        @Test
+        void ignoresCallback_whenAlreadyApproved() {
+            // arrange
+            Order order = createOrderWithItems(1L, 1L);
+            PaymentInfo requested = paymentFacade.requestPayment(order.getId(), PaymentMethod.CARD);
+            paymentFacade.handlePgCallback(requested.pgTransactionId(), true, "APPROVED");
+
+            // act
+            PaymentInfo result = paymentFacade.handlePgCallback(
+                requested.pgTransactionId(), true, "APPROVED"
+            );
+
+            // assert
+            assertThat(result.status()).isEqualTo(PaymentStatus.APPROVED);
+        }
+
+        @DisplayName("이미 FAILED 상태이면, 중복 callback을 무시하고 현재 상태를 반환한다.")
+        @Test
+        void ignoresCallback_whenAlreadyFailed() {
+            // arrange
+            Order order = createOrderWithItems(1L, 1L);
+            PaymentInfo requested = paymentFacade.requestPayment(order.getId(), PaymentMethod.CARD);
+            paymentFacade.handlePgCallback(requested.pgTransactionId(), false, "CARD_DECLINED");
+
+            // act
+            PaymentInfo result = paymentFacade.handlePgCallback(
+                requested.pgTransactionId(), true, "APPROVED"
+            );
+
+            // assert
+            assertThat(result.status()).isEqualTo(PaymentStatus.FAILED);
         }
     }
 

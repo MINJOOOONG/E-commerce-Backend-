@@ -72,6 +72,13 @@ public class Payment extends BaseEntity {
     public String getPgResponseCode() { return pgResponseCode; }
     public ZonedDateTime getApprovedAt() { return approvedAt; }
 
+    public void assignPgTransactionId(String pgTransactionId) {
+        if (pgTransactionId == null || pgTransactionId.isBlank()) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "pgTransactionId는 필수입니다");
+        }
+        this.pgTransactionId = pgTransactionId;
+    }
+
     public void approve(String pgTransactionId, String responseCode) {
         if (this.status != PaymentStatus.PENDING) {
             throw new CoreException(ErrorType.CONFLICT, "결제 대기 상태에서만 승인할 수 있습니다");

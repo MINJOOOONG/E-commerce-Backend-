@@ -45,6 +45,28 @@ public class PaymentTransactionService {
     }
 
     @Transactional
+    public Payment assignPgTransactionId(Long paymentId, String pgTransactionId) {
+        Payment payment = paymentService.getPayment(paymentId);
+        payment.assignPgTransactionId(pgTransactionId);
+        paymentService.createPayment(payment);
+        return payment;
+    }
+
+    @Transactional
+    public Payment approvePayment(Long paymentId, String pgTransactionId, String responseCode) {
+        Payment payment = paymentService.getPayment(paymentId);
+        payment.approve(pgTransactionId, responseCode);
+        paymentService.createPayment(payment);
+
+        Order order = orderRepository.findByIdWithLock(payment.getOrderId())
+            .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "주문을 찾을 수 없습니다"));
+        order.markPaid();
+        orderRepository.save(order);
+
+        return payment;
+    }
+
+    @Transactional
     public Payment failPaymentWithCompensation(Long paymentId, String responseCode) {
         Payment payment = paymentService.getPayment(paymentId);
         payment.fail(responseCode);
