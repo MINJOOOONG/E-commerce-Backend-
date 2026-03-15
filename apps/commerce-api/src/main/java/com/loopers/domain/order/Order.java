@@ -5,6 +5,8 @@ import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 
@@ -27,6 +29,10 @@ public class Order extends BaseEntity {
 
     @Column(name = "final_price", nullable = false)
     private Long finalPrice;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private OrderStatus status;
 
     @Column(name = "coupon_id")
     private Long couponId;
@@ -56,6 +62,7 @@ public class Order extends BaseEntity {
         this.discountAmount = discountAmount;
         this.finalPrice = this.totalPrice - this.discountAmount;
         this.couponId = couponId;
+        this.status = OrderStatus.PENDING_PAYMENT;
     }
 
     private long calculateTotalPrice() {
@@ -84,7 +91,25 @@ public class Order extends BaseEntity {
         return couponId;
     }
 
+    public OrderStatus getStatus() {
+        return status;
+    }
+
     public List<OrderItem> getOrderItems() {
         return Collections.unmodifiableList(orderItems);
+    }
+
+    public void markPaid() {
+        if (this.status != OrderStatus.PENDING_PAYMENT) {
+            throw new CoreException(ErrorType.CONFLICT, "결제 대기 상태에서만 결제 완료 처리할 수 있습니다");
+        }
+        this.status = OrderStatus.PAID;
+    }
+
+    public void cancel() {
+        if (this.status == OrderStatus.CANCELLED) {
+            return;
+        }
+        this.status = OrderStatus.CANCELLED;
     }
 }
