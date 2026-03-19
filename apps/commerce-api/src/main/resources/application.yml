@@ -38,6 +38,11 @@ resilience4j:
         wait-duration-in-open-state: 30s
         permitted-number-of-calls-in-half-open-state: 3
         register-health-indicator: true
+  bulkhead:
+    instances:
+      pgClient:
+        max-concurrent-calls: 15
+        max-wait-duration: 0ms
 
 springdoc:
   use-fqn: true

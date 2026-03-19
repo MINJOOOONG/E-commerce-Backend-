@@ -3,6 +3,7 @@ package com.loopers.infrastructure.payment;
 import com.loopers.domain.payment.PgClient;
 import com.loopers.domain.payment.PgPaymentRequest;
 import com.loopers.domain.payment.PgPaymentResponse;
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -27,6 +28,7 @@ public class PgSimulatorClient implements PgClient {
 
     @Override
     @CircuitBreaker(name = "pgClient")
+    @Bulkhead(name = "pgClient")
     public PgPaymentResponse requestPayment(PgPaymentRequest request) {
         return restTemplate.postForObject(
             baseUrl + "/api/v1/payments",
@@ -37,6 +39,7 @@ public class PgSimulatorClient implements PgClient {
 
     @Override
     @CircuitBreaker(name = "pgClient")
+    @Bulkhead(name = "pgClient")
     public PgPaymentResponse queryPaymentStatus(String pgTransactionId) {
         return restTemplate.getForObject(
             baseUrl + "/api/v1/payments/{pgTransactionId}",
@@ -47,6 +50,7 @@ public class PgSimulatorClient implements PgClient {
 
     @Override
     @CircuitBreaker(name = "pgClient")
+    @Bulkhead(name = "pgClient")
     public PgPaymentResponse cancelPayment(String pgTransactionId) {
         return restTemplate.postForObject(
             baseUrl + "/api/v1/payments/{pgTransactionId}/cancel",
