@@ -5,6 +5,7 @@ import com.loopers.domain.coupon.CouponStatus;
 import com.loopers.domain.coupon.DiscountType;
 import com.loopers.domain.coupon.UserCoupon;
 import com.loopers.domain.order.OrderService;
+import com.loopers.domain.order.OrderStatus;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.user.User;
 import com.loopers.support.error.CoreException;
@@ -67,6 +68,7 @@ class OrderFacadeUnitTest {
                 () -> assertThat(result).isNotNull(),
                 () -> assertThat(result.userId()).isEqualTo(1L),
                 () -> assertThat(result.totalPrice()).isEqualTo(20000L),
+                () -> assertThat(result.status()).as("주문 상태").isEqualTo(OrderStatus.PENDING_PAYMENT),
                 () -> assertThat(result.items()).hasSize(1),
                 () -> assertThat(result.items().get(0).productName()).isEqualTo("상품A"),
                 () -> assertThat(result.items().get(0).quantity()).isEqualTo(2)
