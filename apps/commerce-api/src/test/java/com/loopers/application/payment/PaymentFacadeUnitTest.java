@@ -50,7 +50,7 @@ class PaymentFacadeUnitTest {
         fakePgClient = new FakePgClient();
 
         PaymentTransactionService txService = new PaymentTransactionService(
-            paymentService, orderRepository, productRepository, userRepository, userCouponRepository
+            paymentService, paymentRepository, orderRepository, productRepository, userRepository, userCouponRepository
         );
         paymentFacade = new PaymentFacade(txService, paymentService, fakePgClient);
     }

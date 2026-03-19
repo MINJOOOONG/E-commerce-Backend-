@@ -8,6 +8,7 @@ import com.loopers.domain.order.OrderRepository;
 import com.loopers.domain.order.OrderStatus;
 import com.loopers.domain.payment.Payment;
 import com.loopers.domain.payment.PaymentMethod;
+import com.loopers.domain.payment.PaymentRepository;
 import com.loopers.domain.payment.PaymentService;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductRepository;
@@ -26,6 +27,7 @@ import java.util.List;
 public class PaymentTransactionService {
 
     private final PaymentService paymentService;
+    private final PaymentRepository paymentRepository;
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
@@ -54,7 +56,8 @@ public class PaymentTransactionService {
 
     @Transactional
     public Payment approvePayment(Long paymentId, String pgTransactionId, String responseCode) {
-        Payment payment = paymentService.getPayment(paymentId);
+        Payment payment = paymentRepository.findByIdWithLock(paymentId)
+            .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "결제를 찾을 수 없습니다"));
         payment.approve(pgTransactionId, responseCode);
         paymentService.createPayment(payment);
 
@@ -68,7 +71,8 @@ public class PaymentTransactionService {
 
     @Transactional
     public Payment failPaymentWithCompensation(Long paymentId, String responseCode) {
-        Payment payment = paymentService.getPayment(paymentId);
+        Payment payment = paymentRepository.findByIdWithLock(paymentId)
+            .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "결제를 찾을 수 없습니다"));
         payment.fail(responseCode);
         paymentService.createPayment(payment);
 

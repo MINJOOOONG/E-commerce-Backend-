@@ -32,6 +32,11 @@ public class PaymentRepositoryImpl implements PaymentRepository {
     }
 
     @Override
+    public Optional<Payment> findByIdWithLock(Long id) {
+        return paymentJpaRepository.findByIdWithLock(id);
+    }
+
+    @Override
     public Optional<Payment> findByPgTransactionId(String pgTransactionId) {
         return paymentJpaRepository.findByPgTransactionId(pgTransactionId);
     }

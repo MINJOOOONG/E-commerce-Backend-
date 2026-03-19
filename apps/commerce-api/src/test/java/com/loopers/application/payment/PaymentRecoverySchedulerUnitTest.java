@@ -42,7 +42,7 @@ class PaymentRecoverySchedulerUnitTest {
         fakePgClient = new FakePgClient();
 
         PaymentTransactionService txService = new PaymentTransactionService(
-            paymentService, orderRepository, productRepository, userRepository, userCouponRepository
+            paymentService, paymentRepository, orderRepository, productRepository, userRepository, userCouponRepository
         );
         paymentFacade = new PaymentFacade(txService, paymentService, fakePgClient);
         scheduler = new PaymentRecoveryScheduler(paymentService, txService, fakePgClient);
@@ -127,20 +127,26 @@ class PaymentRecoverySchedulerUnitTest {
             assertThat(payment.getStatus()).isEqualTo(PaymentStatus.APPROVED);
         }
 
-        @DisplayName("pgTransactionId가 없는 Payment는 skip한다.")
+        @DisplayName("pgTransactionId가 없고 생성 후 충분한 시간이 지난 Payment는 FAILED 처리하고 보상한다.")
         @Test
-        void skipsPayment_whenPgTransactionIdIsNull() {
+        void failsAbandonedPayment_whenPgTransactionIdIsNullAndExpired() {
             // arrange — PG 호출 중 예외가 발생하여 pgTransactionId가 없는 상태
             Order order = createOrderWithItems();
             fakePgClient.setShouldThrow(true);
             paymentFacade.requestPayment(order.getId(), PaymentMethod.CARD);
             fakePgClient.setShouldThrow(false);
 
-            // act
+            // act — createdAt이 null(단위 테스트)이므로 abandoned로 판단
             scheduler.recover();
 
-            // assert — PENDING 상태 그대로 유지
-            assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING_PAYMENT);
+            // assert — 보상 처리 완료
+            assertAll(
+                () -> assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED),
+                () -> assertThat(userRepository.findById(1L).get().getPoint())
+                    .as("포인트 환불").isEqualTo(100000L),
+                () -> assertThat(productRepository.findById(1L).get().getStockQuantity().value())
+                    .as("재고 복구").isEqualTo(10)
+            );
         }
     }
 }

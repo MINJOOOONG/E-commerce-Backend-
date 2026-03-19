@@ -14,5 +14,7 @@ public interface PaymentRepository {
 
     Optional<Payment> findByPgTransactionId(String pgTransactionId);
 
+    Optional<Payment> findByIdWithLock(Long id);
+
     List<Payment> findAllByStatusAndCreatedAtBefore(PaymentStatus status, ZonedDateTime threshold);
 }

@@ -19,6 +19,7 @@ import java.util.List;
 public class PaymentRecoveryScheduler {
 
     private static final long PENDING_THRESHOLD_MINUTES = 1L;
+    private static final long ABANDONED_THRESHOLD_MINUTES = 5L;
 
     private final PaymentService paymentService;
     private final PaymentTransactionService transactionService;
@@ -35,11 +36,12 @@ public class PaymentRecoveryScheduler {
     }
 
     private void recoverPayment(Payment payment) {
-        if (payment.getPgTransactionId() == null) {
+        if (payment.getStatus() != PaymentStatus.PENDING) {
             return;
         }
 
-        if (payment.getStatus() != PaymentStatus.PENDING) {
+        if (payment.getPgTransactionId() == null) {
+            handleAbandonedPayment(payment);
             return;
         }
 
@@ -62,6 +64,22 @@ public class PaymentRecoveryScheduler {
         } catch (Exception e) {
             log.warn("결제 복구 중 오류 발생. paymentId={}, pgTxId={}, error={}",
                 payment.getId(), payment.getPgTransactionId(), e.getMessage());
+        }
+    }
+
+    private void handleAbandonedPayment(Payment payment) {
+        ZonedDateTime abandonedThreshold = ZonedDateTime.now().minusMinutes(ABANDONED_THRESHOLD_MINUTES);
+
+        if (payment.getCreatedAt() != null && payment.getCreatedAt().isAfter(abandonedThreshold)) {
+            return;
+        }
+
+        try {
+            transactionService.failPaymentWithCompensation(payment.getId(), "ABANDONED");
+            log.info("미연결 결제 실패 처리 완료. paymentId={}", payment.getId());
+        } catch (Exception e) {
+            log.warn("미연결 결제 실패 처리 중 오류 발생. paymentId={}, error={}",
+                payment.getId(), e.getMessage());
         }
     }
 }

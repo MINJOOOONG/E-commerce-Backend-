@@ -7,6 +7,8 @@ import com.loopers.domain.payment.PaymentStatus;
 import com.loopers.domain.payment.PgClient;
 import com.loopers.domain.payment.PgPaymentRequest;
 import com.loopers.domain.payment.PgPaymentResponse;
+import com.loopers.support.error.CoreException;
+import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -57,16 +59,25 @@ public class PaymentFacade {
             return PaymentInfo.from(payment);
         }
 
-        if (success) {
-            Payment approved = transactionService.approvePayment(
-                payment.getId(), pgTransactionId, responseCode
-            );
-            return PaymentInfo.from(approved);
-        }
+        try {
+            if (success) {
+                Payment approved = transactionService.approvePayment(
+                    payment.getId(), pgTransactionId, responseCode
+                );
+                return PaymentInfo.from(approved);
+            }
 
-        Payment failed = transactionService.failPaymentWithCompensation(
-            payment.getId(), responseCode
-        );
-        return PaymentInfo.from(failed);
+            Payment failed = transactionService.failPaymentWithCompensation(
+                payment.getId(), responseCode
+            );
+            return PaymentInfo.from(failed);
+        } catch (CoreException e) {
+            if (e.getErrorType() == ErrorType.CONFLICT) {
+                log.info("결제 상태가 이미 변경됨 (동시 처리). pgTxId={}", pgTransactionId);
+                Payment current = paymentService.getPaymentByPgTransactionId(pgTransactionId);
+                return PaymentInfo.from(current);
+            }
+            throw e;
+        }
     }
 }

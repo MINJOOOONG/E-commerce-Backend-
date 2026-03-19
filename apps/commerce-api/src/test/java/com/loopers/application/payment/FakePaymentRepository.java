@@ -27,6 +27,11 @@ class FakePaymentRepository implements PaymentRepository {
     }
 
     @Override
+    public Optional<Payment> findByIdWithLock(Long id) {
+        return findById(id);
+    }
+
+    @Override
     public Optional<Payment> findByOrderId(Long orderId) {
         return store.values().stream()
             .filter(p -> p.getOrderId().equals(orderId))
