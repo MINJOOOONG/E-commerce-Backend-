@@ -1,16 +1,27 @@
 package com.loopers.application.order.event;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.loopers.domain.outbox.OutboxEvent;
+import com.loopers.domain.outbox.OutboxEventRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 @Slf4j
+@RequiredArgsConstructor
 @Component
 public class OrderEventHandler {
 
+    private final OutboxEventRepository outboxEventRepository;
+    private final ObjectMapper objectMapper;
+
     @Async("orderEventExecutor")
+    @Transactional
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleOrderCreated(OrderCreatedEvent event) {
         log.info("[OrderCreatedEvent] 주문 생성 완료 - orderId={}, userId={}, totalAmount={}, couponId={}",
@@ -20,8 +31,19 @@ public class OrderEventHandler {
                 event.getCouponId()
         );
 
-        // TODO: 주문 생성 알림 발송 (이메일, 푸시 등)
-        // TODO: 주문 메트릭 집계 (주문 수, 매출액 등)
-        // TODO: 외부 시스템 연동 (물류, ERP 등)
+        String payload = serializeEvent(event);
+        OutboxEvent outboxEvent = new OutboxEvent("OrderCreatedEvent", payload);
+        outboxEventRepository.save(outboxEvent);
+
+        log.info("[Outbox] 이벤트 저장 완료 - outboxId={}, eventType={}",
+                outboxEvent.getId(), outboxEvent.getEventType());
+    }
+
+    private String serializeEvent(OrderCreatedEvent event) {
+        try {
+            return objectMapper.writeValueAsString(event);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("이벤트 직렬화 실패", e);
+        }
     }
 }
