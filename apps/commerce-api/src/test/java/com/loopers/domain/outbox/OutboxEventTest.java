@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import com.loopers.domain.outbox.EventType;
 
 class OutboxEventTest {
 
@@ -16,10 +17,10 @@ class OutboxEventTest {
         @Test
         void createsWithInitStatus() {
             // act
-            OutboxEvent event = new OutboxEvent("OrderCreatedEvent", "{\"orderId\":1}");
+            OutboxEvent event = new OutboxEvent(EventType.ORDER_CREATED, "{\"orderId\":1}");
 
             // assert
-            assertThat(event.getEventType()).isEqualTo("OrderCreatedEvent");
+            assertThat(event.getEventType()).isEqualTo(EventType.ORDER_CREATED);
             assertThat(event.getPayload()).isEqualTo("{\"orderId\":1}");
             assertThat(event.getStatus()).isEqualTo(OutboxStatus.INIT);
         }
@@ -33,7 +34,7 @@ class OutboxEventTest {
         @Test
         void changesStatusToSent() {
             // arrange
-            OutboxEvent event = new OutboxEvent("OrderCreatedEvent", "{\"orderId\":1}");
+            OutboxEvent event = new OutboxEvent(EventType.ORDER_CREATED, "{\"orderId\":1}");
 
             // act
             event.markSent();

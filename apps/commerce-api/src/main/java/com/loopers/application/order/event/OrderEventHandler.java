@@ -2,6 +2,7 @@ package com.loopers.application.order.event;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.loopers.domain.outbox.EventType;
 import com.loopers.domain.outbox.OutboxEvent;
 import com.loopers.domain.outbox.OutboxEventRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +22,7 @@ public class OrderEventHandler {
     private final ObjectMapper objectMapper;
 
     @Async("orderEventExecutor")
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleOrderCreated(OrderCreatedEvent event) {
         log.info("[OrderCreatedEvent] 주문 생성 완료 - orderId={}, userId={}, totalAmount={}, couponId={}",
@@ -32,7 +33,7 @@ public class OrderEventHandler {
         );
 
         String payload = serializeEvent(event);
-        OutboxEvent outboxEvent = new OutboxEvent("OrderCreatedEvent", payload);
+        OutboxEvent outboxEvent = new OutboxEvent(EventType.ORDER_CREATED, payload);
         outboxEventRepository.save(outboxEvent);
 
         log.info("[Outbox] 이벤트 저장 완료 - outboxId={}, eventType={}",

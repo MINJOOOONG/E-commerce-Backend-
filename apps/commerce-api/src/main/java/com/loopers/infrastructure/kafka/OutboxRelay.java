@@ -17,8 +17,6 @@ import java.util.List;
 @Component
 public class OutboxRelay {
 
-    public static final String ORDER_EVENTS_TOPIC = "order-events";
-
     private final OutboxEventRepository outboxEventRepository;
     private final KafkaTemplate<Object, Object> kafkaTemplate;
 
@@ -29,7 +27,9 @@ public class OutboxRelay {
 
         for (OutboxEvent event : pendingEvents) {
             try {
-                kafkaTemplate.send(ORDER_EVENTS_TOPIC, event.getId().toString(), event.getPayload())
+                String topic = event.getEventType().getTopic();
+
+                kafkaTemplate.send(topic, event.getId().toString(), event.getPayload())
                     .whenComplete((result, ex) -> {
                         if (ex != null) {
                             log.error("[OutboxRelay] Kafka 발행 실패 - outboxId={}", event.getId(), ex);
@@ -40,7 +40,7 @@ public class OutboxRelay {
                 outboxEventRepository.save(event);
 
                 log.info("[OutboxRelay] Kafka 발행 완료 - outboxId={}, topic={}",
-                        event.getId(), ORDER_EVENTS_TOPIC);
+                        event.getId(), topic);
             } catch (Exception e) {
                 log.error("[OutboxRelay] Kafka 발행 중 예외 - outboxId={}", event.getId(), e);
             }

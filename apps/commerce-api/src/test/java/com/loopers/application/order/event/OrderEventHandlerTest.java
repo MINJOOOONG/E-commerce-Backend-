@@ -1,6 +1,7 @@
 package com.loopers.application.order.event;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.loopers.domain.outbox.EventType;
 import com.loopers.domain.outbox.OutboxEvent;
 import com.loopers.domain.outbox.OutboxEventRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -53,7 +54,7 @@ class OrderEventHandlerTest {
             verify(outboxEventRepository).save(captor.capture());
 
             OutboxEvent saved = captor.getValue();
-            assertThat(saved.getEventType()).isEqualTo("OrderCreatedEvent");
+            assertThat(saved.getEventType()).isEqualTo(EventType.ORDER_CREATED);
             assertThat(saved.getPayload()).contains("\"orderId\":1");
             assertThat(saved.getPayload()).contains("\"totalAmount\":50000");
         }

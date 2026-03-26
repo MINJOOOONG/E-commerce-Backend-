@@ -16,8 +16,9 @@ import com.loopers.domain.BaseEntity;
 @Table(name = "outbox_event")
 public class OutboxEvent extends BaseEntity {
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "event_type", nullable = false, length = 100)
-    private String eventType;
+    private EventType eventType;
 
     @Column(name = "payload", nullable = false, columnDefinition = "TEXT")
     private String payload;
@@ -26,7 +27,7 @@ public class OutboxEvent extends BaseEntity {
     @Column(name = "status", nullable = false, length = 20)
     private OutboxStatus status;
 
-    public OutboxEvent(String eventType, String payload) {
+    public OutboxEvent(EventType eventType, String payload) {
         this.eventType = eventType;
         this.payload = payload;
         this.status = OutboxStatus.INIT;

@@ -2,6 +2,7 @@ package com.loopers.infrastructure.kafka;
 
 import com.loopers.domain.idempotency.EventHandled;
 import com.loopers.domain.idempotency.EventHandledRepository;
+import com.loopers.domain.outbox.EventType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -18,7 +19,7 @@ public class OrderKafkaConsumer {
 
     @Transactional
     @KafkaListener(
-        topics = OutboxRelay.ORDER_EVENTS_TOPIC,
+        topics = "order-events",
         groupId = "order-event-consumer"
     )
     public void consume(ConsumerRecord<String, String> record) {

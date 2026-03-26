@@ -1,5 +1,6 @@
 package com.loopers.infrastructure.kafka;
 
+import com.loopers.domain.outbox.EventType;
 import com.loopers.domain.outbox.OutboxEvent;
 import com.loopers.domain.outbox.OutboxEventRepository;
 import com.loopers.domain.outbox.OutboxStatus;
@@ -38,11 +39,11 @@ class OutboxRelayTest {
     @Nested
     class Relay {
 
-        @DisplayName("INIT 상태 이벤트가 있으면 Kafka로 발행하고 SENT로 변경한다.")
+        @DisplayName("ORDER_CREATED 이벤트는 order-events 토픽으로 발행한다.")
         @Test
-        void sendsAndMarksSent() {
+        void sendsOrderEventToOrderTopic() {
             // arrange
-            OutboxEvent event = new OutboxEvent("OrderCreatedEvent", "{\"orderId\":1}");
+            OutboxEvent event = new OutboxEvent(EventType.ORDER_CREATED, "{\"orderId\":1}");
             when(outboxEventRepository.findByStatus(OutboxStatus.INIT)).thenReturn(List.of(event));
             when(kafkaTemplate.send(any(), any(), any())).thenReturn(new CompletableFuture<>());
             when(outboxEventRepository.save(any(OutboxEvent.class)))
@@ -52,8 +53,25 @@ class OutboxRelayTest {
             outboxRelay.relay();
 
             // assert
-            verify(kafkaTemplate).send(eq(OutboxRelay.ORDER_EVENTS_TOPIC), any(), eq("{\"orderId\":1}"));
-            verify(outboxEventRepository).save(event);
+            verify(kafkaTemplate).send(eq("order-events"), any(), eq("{\"orderId\":1}"));
+            assertThat(event.getStatus()).isEqualTo(OutboxStatus.SENT);
+        }
+
+        @DisplayName("COUPON_ISSUE_REQUESTED 이벤트는 coupon-issue-requests 토픽으로 발행한다.")
+        @Test
+        void sendsCouponEventToCouponTopic() {
+            // arrange
+            OutboxEvent event = new OutboxEvent(EventType.COUPON_ISSUE_REQUESTED, "{\"userId\":1}");
+            when(outboxEventRepository.findByStatus(OutboxStatus.INIT)).thenReturn(List.of(event));
+            when(kafkaTemplate.send(any(), any(), any())).thenReturn(new CompletableFuture<>());
+            when(outboxEventRepository.save(any(OutboxEvent.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+            // act
+            outboxRelay.relay();
+
+            // assert
+            verify(kafkaTemplate).send(eq("coupon-issue-requests"), any(), eq("{\"userId\":1}"));
             assertThat(event.getStatus()).isEqualTo(OutboxStatus.SENT);
         }
 
