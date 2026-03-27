@@ -28,8 +28,11 @@ public class OutboxRelay {
         for (OutboxEvent event : pendingEvents) {
             try {
                 String topic = event.getEventType().getTopic();
+                String key = event.getPartitionKey() != null
+                    ? event.getPartitionKey()
+                    : event.getId().toString();
 
-                kafkaTemplate.send(topic, event.getId().toString(), event.getPayload())
+                kafkaTemplate.send(topic, key, event.getPayload())
                     .whenComplete((result, ex) -> {
                         if (ex != null) {
                             log.error("[OutboxRelay] Kafka 발행 실패 - outboxId={}", event.getId(), ex);

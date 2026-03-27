@@ -31,7 +31,9 @@ public class CouponFacade {
         couponIssueRequestRepository.save(request);
 
         String payload = serializePayload(request);
-        OutboxEvent outboxEvent = new OutboxEvent(EventType.COUPON_ISSUE_REQUESTED, payload);
+        OutboxEvent outboxEvent = new OutboxEvent(
+            EventType.COUPON_ISSUE_REQUESTED, payload, couponTemplateId.toString()
+        );
         outboxEventRepository.save(outboxEvent);
 
         log.info("[CouponFacade] 쿠폰 발급 요청 저장 - requestId={}, userId={}, templateId={}",

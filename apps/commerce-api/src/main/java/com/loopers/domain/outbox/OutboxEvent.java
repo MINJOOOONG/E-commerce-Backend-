@@ -27,9 +27,17 @@ public class OutboxEvent extends BaseEntity {
     @Column(name = "status", nullable = false, length = 20)
     private OutboxStatus status;
 
+    @Column(name = "partition_key", length = 100)
+    private String partitionKey;
+
     public OutboxEvent(EventType eventType, String payload) {
+        this(eventType, payload, null);
+    }
+
+    public OutboxEvent(EventType eventType, String payload, String partitionKey) {
         this.eventType = eventType;
         this.payload = payload;
+        this.partitionKey = partitionKey;
         this.status = OutboxStatus.INIT;
     }
 
