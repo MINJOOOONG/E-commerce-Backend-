@@ -6,11 +6,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.loopers.domain.coupon.CouponService;
 import com.loopers.domain.idempotency.EventHandled;
 import com.loopers.domain.idempotency.EventHandledRepository;
-import com.loopers.domain.outbox.EventType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,12 +28,13 @@ public class CouponKafkaConsumer {
         topics = "coupon-issue-requests",
         groupId = "coupon-issue-consumer"
     )
-    public void consume(ConsumerRecord<String, String> record) {
+    public void consume(ConsumerRecord<String, String> record, Acknowledgment acknowledgment) {
         String eventId = record.key();
         String payload = record.value();
 
         if (eventHandledRepository.existsByEventId(eventId)) {
             log.info("[CouponKafkaConsumer] 중복 이벤트 스킵 - eventId={}", eventId);
+            acknowledgment.acknowledge();
             return;
         }
 
@@ -52,6 +53,7 @@ public class CouponKafkaConsumer {
         }
 
         eventHandledRepository.save(new EventHandled(eventId));
+        acknowledgment.acknowledge();
         log.info("[CouponKafkaConsumer] 이벤트 처리 완료 - eventId={}", eventId);
     }
 }
