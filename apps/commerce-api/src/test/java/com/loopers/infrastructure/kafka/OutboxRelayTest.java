@@ -57,11 +57,11 @@ class OutboxRelayTest {
             assertThat(event.getStatus()).isEqualTo(OutboxStatus.SENT);
         }
 
-        @DisplayName("COUPON_ISSUE_REQUESTED 이벤트는 coupon-issue-requests 토픽으로 발행한다.")
+        @DisplayName("COUPON_ISSUE_REQUESTED 이벤트는 coupon-issue-requests 토픽에 partitionKey를 key로 발행한다.")
         @Test
-        void sendsCouponEventToCouponTopic() {
+        void sendsCouponEventWithPartitionKey() {
             // arrange
-            OutboxEvent event = new OutboxEvent(EventType.COUPON_ISSUE_REQUESTED, "{\"userId\":1}");
+            OutboxEvent event = new OutboxEvent(EventType.COUPON_ISSUE_REQUESTED, "{\"userId\":1}", "10");
             when(outboxEventRepository.findByStatus(OutboxStatus.INIT)).thenReturn(List.of(event));
             when(kafkaTemplate.send(any(), any(), any())).thenReturn(new CompletableFuture<>());
             when(outboxEventRepository.save(any(OutboxEvent.class)))
@@ -71,7 +71,7 @@ class OutboxRelayTest {
             outboxRelay.relay();
 
             // assert
-            verify(kafkaTemplate).send(eq("coupon-issue-requests"), any(), eq("{\"userId\":1}"));
+            verify(kafkaTemplate).send(eq("coupon-issue-requests"), eq("10"), eq("{\"userId\":1}"));
             assertThat(event.getStatus()).isEqualTo(OutboxStatus.SENT);
         }
 

@@ -13,7 +13,7 @@ class OutboxEventTest {
     @Nested
     class Create {
 
-        @DisplayName("eventType과 payload를 전달하면, 상태가 INIT으로 생성된다.")
+        @DisplayName("eventType과 payload를 전달하면, 상태가 INIT으로 생성되고 partitionKey는 null이다.")
         @Test
         void createsWithInitStatus() {
             // act
@@ -23,6 +23,18 @@ class OutboxEventTest {
             assertThat(event.getEventType()).isEqualTo(EventType.ORDER_CREATED);
             assertThat(event.getPayload()).isEqualTo("{\"orderId\":1}");
             assertThat(event.getStatus()).isEqualTo(OutboxStatus.INIT);
+            assertThat(event.getPartitionKey()).isNull();
+        }
+
+        @DisplayName("partitionKey를 함께 전달하면, partitionKey가 설정된다.")
+        @Test
+        void createsWithPartitionKey() {
+            // act
+            OutboxEvent event = new OutboxEvent(EventType.COUPON_ISSUE_REQUESTED, "{}", "10");
+
+            // assert
+            assertThat(event.getPartitionKey()).isEqualTo("10");
+            assertThat(event.getEventType()).isEqualTo(EventType.COUPON_ISSUE_REQUESTED);
         }
     }
 

@@ -66,6 +66,7 @@ class CouponFacadeTest {
             verify(outboxEventRepository).save(outboxCaptor.capture());
             assertThat(outboxCaptor.getValue().getEventType()).isEqualTo(EventType.COUPON_ISSUE_REQUESTED);
             assertThat(outboxCaptor.getValue().getPayload()).contains("\"userId\":1");
+            assertThat(outboxCaptor.getValue().getPartitionKey()).isEqualTo("10");
         }
     }
 

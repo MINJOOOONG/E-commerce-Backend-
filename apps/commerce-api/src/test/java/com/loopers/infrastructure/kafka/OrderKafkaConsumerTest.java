@@ -11,6 +11,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.kafka.support.Acknowledgment;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -24,6 +25,9 @@ class OrderKafkaConsumerTest {
     @Mock
     private EventHandledRepository eventHandledRepository;
 
+    @Mock
+    private Acknowledgment acknowledgment;
+
     @InjectMocks
     private OrderKafkaConsumer consumer;
 
@@ -31,7 +35,7 @@ class OrderKafkaConsumerTest {
     @Nested
     class Consume {
 
-        @DisplayName("처음 받은 이벤트면 처리하고 event_handled에 기록한다.")
+        @DisplayName("처음 받은 이벤트면 처리하고 event_handled에 기록 후 ack한다.")
         @Test
         void processesNewEvent() {
             // arrange
@@ -42,15 +46,16 @@ class OrderKafkaConsumerTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
             // act
-            consumer.consume(record);
+            consumer.consume(record, acknowledgment);
 
             // assert
             ArgumentCaptor<EventHandled> captor = ArgumentCaptor.forClass(EventHandled.class);
             verify(eventHandledRepository).save(captor.capture());
             assertThat(captor.getValue().getEventId()).isEqualTo("1");
+            verify(acknowledgment).acknowledge();
         }
 
-        @DisplayName("이미 처리된 이벤트면 스킵한다.")
+        @DisplayName("이미 처리된 이벤트면 스킵하고 ack한다.")
         @Test
         void skipsDuplicateEvent() {
             // arrange
@@ -59,10 +64,11 @@ class OrderKafkaConsumerTest {
             when(eventHandledRepository.existsByEventId("1")).thenReturn(true);
 
             // act
-            consumer.consume(record);
+            consumer.consume(record, acknowledgment);
 
             // assert
             verify(eventHandledRepository, never()).save(any());
+            verify(acknowledgment).acknowledge();
         }
     }
 }
