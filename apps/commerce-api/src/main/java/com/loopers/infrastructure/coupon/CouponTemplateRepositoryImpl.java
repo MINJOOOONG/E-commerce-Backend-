@@ -3,23 +3,23 @@ package com.loopers.infrastructure.coupon;
 import com.loopers.domain.coupon.CouponTemplate;
 import com.loopers.domain.coupon.CouponTemplateRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
 @RequiredArgsConstructor
-@Component
+@Repository
 public class CouponTemplateRepositoryImpl implements CouponTemplateRepository {
 
-    private final CouponTemplateJpaRepository couponTemplateJpaRepository;
+    private final CouponTemplateJpaRepository jpaRepository;
 
     @Override
     public CouponTemplate save(CouponTemplate couponTemplate) {
-        return couponTemplateJpaRepository.save(couponTemplate);
+        return jpaRepository.save(couponTemplate);
     }
 
     @Override
-    public Optional<CouponTemplate> findById(Long id) {
-        return couponTemplateJpaRepository.findById(id);
+    public Optional<CouponTemplate> findByIdWithLock(Long id) {
+        return jpaRepository.findByIdWithLock(id);
     }
 }

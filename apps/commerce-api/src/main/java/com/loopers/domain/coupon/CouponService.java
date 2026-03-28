@@ -3,40 +3,46 @@ package com.loopers.domain.coupon;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-
+@Slf4j
 @RequiredArgsConstructor
 @Component
 public class CouponService {
 
     private final CouponTemplateRepository couponTemplateRepository;
     private final UserCouponRepository userCouponRepository;
+    private final CouponIssueRequestRepository couponIssueRequestRepository;
 
     @Transactional
-    public UserCoupon issue(Long userId, Long couponTemplateId) {
-        CouponTemplate template = couponTemplateRepository.findById(couponTemplateId)
-            .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "쿠폰 템플릿을 찾을 수 없습니다"));
+    public void issueWithLimit(String requestId, Long userId, Long couponTemplateId) {
+        CouponIssueRequest request = couponIssueRequestRepository.findByRequestId(requestId)
+            .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "발급 요청을 찾을 수 없습니다"));
 
-        UserCoupon userCoupon = new UserCoupon(userId, couponTemplateId, template.getValidDays());
-        return userCouponRepository.save(userCoupon);
-    }
+        try {
+            if (userCouponRepository.existsByUserIdAndCouponTemplateId(userId, couponTemplateId)) {
+                request.fail("이미 발급받은 쿠폰입니다 (중복 발급 불가)");
+                return;
+            }
 
-    @Transactional(readOnly = true)
-    public List<UserCoupon> getUserCoupons(Long userId) {
-        return userCouponRepository.findByUserId(userId);
-    }
+            CouponTemplate template = couponTemplateRepository.findByIdWithLock(couponTemplateId)
+                .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "쿠폰 템플릿을 찾을 수 없습니다"));
 
-    @Transactional(readOnly = true)
-    public CouponTemplate getTemplate(Long id) {
-        return couponTemplateRepository.findById(id)
-            .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "쿠폰 템플릿을 찾을 수 없습니다"));
-    }
+            template.issue();
+            userCouponRepository.save(new UserCoupon(userId, couponTemplateId));
+            request.succeed();
 
-    @Transactional
-    public CouponTemplate createTemplate(CouponTemplate template) {
-        return couponTemplateRepository.save(template);
+            log.info("[CouponService] 쿠폰 발급 성공 - requestId={}, userId={}, templateId={}",
+                    requestId, userId, couponTemplateId);
+        } catch (CoreException e) {
+            if (e.getErrorType() == ErrorType.CONFLICT) {
+                request.fail("쿠폰이 모두 소진되었습니다");
+                log.info("[CouponService] 쿠폰 소진 - requestId={}", requestId);
+            } else {
+                throw e;
+            }
+        }
     }
 }

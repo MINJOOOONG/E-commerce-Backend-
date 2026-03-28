@@ -1,26 +1,63 @@
 package com.loopers.application.coupon;
 
-import com.loopers.domain.coupon.CouponService;
-import com.loopers.domain.coupon.UserCoupon;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.loopers.domain.coupon.CouponIssueRequest;
+import com.loopers.domain.coupon.CouponIssueRequestRepository;
+import com.loopers.domain.outbox.EventType;
+import com.loopers.domain.outbox.OutboxEvent;
+import com.loopers.domain.outbox.OutboxEventRepository;
+import com.loopers.support.error.CoreException;
+import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
+import java.util.Map;
 
+@Slf4j
 @RequiredArgsConstructor
 @Component
 public class CouponFacade {
 
-    private final CouponService couponService;
+    private final CouponIssueRequestRepository couponIssueRequestRepository;
+    private final OutboxEventRepository outboxEventRepository;
+    private final ObjectMapper objectMapper;
 
-    public CouponInfo issueCoupon(Long userId, Long couponTemplateId) {
-        UserCoupon userCoupon = couponService.issue(userId, couponTemplateId);
-        return CouponInfo.from(userCoupon);
+    @Transactional
+    public String requestIssue(Long userId, Long couponTemplateId) {
+        CouponIssueRequest request = new CouponIssueRequest(userId, couponTemplateId);
+        couponIssueRequestRepository.save(request);
+
+        String payload = serializePayload(request);
+        OutboxEvent outboxEvent = new OutboxEvent(
+            EventType.COUPON_ISSUE_REQUESTED, payload, couponTemplateId.toString()
+        );
+        outboxEventRepository.save(outboxEvent);
+
+        log.info("[CouponFacade] 쿠폰 발급 요청 저장 - requestId={}, userId={}, templateId={}",
+                request.getRequestId(), userId, couponTemplateId);
+
+        return request.getRequestId();
     }
 
-    public List<CouponInfo> getUserCoupons(Long userId) {
-        return couponService.getUserCoupons(userId).stream()
-            .map(CouponInfo::from)
-            .toList();
+    @Transactional(readOnly = true)
+    public CouponIssueRequestInfo getIssueRequestStatus(String requestId) {
+        CouponIssueRequest request = couponIssueRequestRepository.findByRequestId(requestId)
+            .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "발급 요청을 찾을 수 없습니다"));
+        return CouponIssueRequestInfo.from(request);
+    }
+
+    private String serializePayload(CouponIssueRequest request) {
+        try {
+            return objectMapper.writeValueAsString(Map.of(
+                "requestId", request.getRequestId(),
+                "userId", request.getUserId(),
+                "couponTemplateId", request.getCouponTemplateId()
+            ));
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("페이로드 직렬화 실패", e);
+        }
     }
 }

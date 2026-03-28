@@ -6,5 +6,5 @@ public interface CouponTemplateRepository {
 
     CouponTemplate save(CouponTemplate couponTemplate);
 
-    Optional<CouponTemplate> findById(Long id);
+    Optional<CouponTemplate> findByIdWithLock(Long id);
 }

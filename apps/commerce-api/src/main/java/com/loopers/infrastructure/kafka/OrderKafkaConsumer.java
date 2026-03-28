@@ -1,0 +1,43 @@
+package com.loopers.infrastructure.kafka;
+
+import com.loopers.domain.idempotency.EventHandled;
+import com.loopers.domain.idempotency.EventHandledRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+@Slf4j
+@RequiredArgsConstructor
+@Component
+public class OrderKafkaConsumer {
+
+    private final EventHandledRepository eventHandledRepository;
+
+    @Transactional
+    @KafkaListener(
+        topics = "order-events",
+        groupId = "order-event-consumer"
+    )
+    public void consume(ConsumerRecord<String, String> record, Acknowledgment acknowledgment) {
+        String eventId = record.key();
+        String payload = record.value();
+
+        if (eventHandledRepository.existsByEventId(eventId)) {
+            log.info("[OrderKafkaConsumer] 중복 이벤트 스킵 - eventId={}", eventId);
+            acknowledgment.acknowledge();
+            return;
+        }
+
+        log.info("[OrderKafkaConsumer] 이벤트 수신 - eventId={}, payload={}", eventId, payload);
+
+        // TODO: 실제 후속 처리 로직 (알림 발송, 메트릭 집계, 외부 시스템 연동 등)
+
+        eventHandledRepository.save(new EventHandled(eventId));
+        acknowledgment.acknowledge();
+        log.info("[OrderKafkaConsumer] 이벤트 처리 완료 - eventId={}", eventId);
+    }
+}
