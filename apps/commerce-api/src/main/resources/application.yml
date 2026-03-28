@@ -24,6 +24,26 @@ spring:
       - logging.yml
       - monitoring.yml
 
+pg:
+  simulator:
+    base-url: http://localhost:8081
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      pgClient:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+        register-health-indicator: true
+  bulkhead:
+    instances:
+      pgClient:
+        max-concurrent-calls: 15
+        max-wait-duration: 0ms
+
 springdoc:
   use-fqn: true
   swagger-ui:

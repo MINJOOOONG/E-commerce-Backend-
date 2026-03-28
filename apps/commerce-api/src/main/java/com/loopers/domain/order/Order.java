@@ -1,0 +1,115 @@
+package com.loopers.domain.order;
+
+import com.loopers.domain.BaseEntity;
+import com.loopers.support.error.CoreException;
+import com.loopers.support.error.ErrorType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+@Entity
+@Table(name = "orders")
+public class Order extends BaseEntity {
+
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
+
+    @Column(name = "total_price", nullable = false)
+    private Long totalPrice;
+
+    @Column(name = "discount_amount", nullable = false)
+    private Long discountAmount;
+
+    @Column(name = "final_price", nullable = false)
+    private Long finalPrice;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private OrderStatus status;
+
+    @Column(name = "coupon_id")
+    private Long couponId;
+
+    @Transient
+    private List<OrderItem> orderItems = new ArrayList<>();
+
+    protected Order() {}
+
+    public Order(Long userId, List<OrderItem> orderItems) {
+        this(userId, orderItems, 0L, null);
+    }
+
+    public Order(Long userId, List<OrderItem> orderItems, Long discountAmount, Long couponId) {
+        if (userId == null) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "userId는 필수입니다");
+        }
+        if (orderItems == null || orderItems.isEmpty()) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "주문 항목은 1개 이상이어야 합니다");
+        }
+        if (discountAmount == null || discountAmount < 0) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "할인 금액은 0 이상이어야 합니다");
+        }
+        this.userId = userId;
+        this.orderItems = new ArrayList<>(orderItems);
+        this.totalPrice = calculateTotalPrice();
+        this.discountAmount = discountAmount;
+        this.finalPrice = this.totalPrice - this.discountAmount;
+        this.couponId = couponId;
+        this.status = OrderStatus.PENDING_PAYMENT;
+    }
+
+    private long calculateTotalPrice() {
+        return orderItems.stream()
+            .mapToLong(OrderItem::totalPrice)
+            .sum();
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public Long getTotalPrice() {
+        return totalPrice;
+    }
+
+    public Long getDiscountAmount() {
+        return discountAmount;
+    }
+
+    public Long getFinalPrice() {
+        return finalPrice;
+    }
+
+    public Long getCouponId() {
+        return couponId;
+    }
+
+    public OrderStatus getStatus() {
+        return status;
+    }
+
+    public List<OrderItem> getOrderItems() {
+        return Collections.unmodifiableList(orderItems);
+    }
+
+    public void markPaid() {
+        if (this.status != OrderStatus.PENDING_PAYMENT) {
+            throw new CoreException(ErrorType.CONFLICT, "결제 대기 상태에서만 결제 완료 처리할 수 있습니다");
+        }
+        this.status = OrderStatus.PAID;
+    }
+
+    public void cancel() {
+        if (this.status == OrderStatus.CANCELLED) {
+            return;
+        }
+        this.status = OrderStatus.CANCELLED;
+    }
+}
