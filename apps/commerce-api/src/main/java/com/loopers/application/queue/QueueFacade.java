@@ -62,7 +62,7 @@ public class QueueFacade {
         }
 
         long totalWaiting = orderQueueService.getWaitingCount();
-        long estimatedWaitSeconds = position.get() / ESTIMATED_TPS;
+        long estimatedWaitSeconds = (long) Math.ceil((double) position.get() / BATCH_SIZE);
 
         return new QueueInfo.PositionResult(
             userId,
