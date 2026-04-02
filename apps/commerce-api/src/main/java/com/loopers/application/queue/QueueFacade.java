@@ -88,11 +88,14 @@ public class QueueFacade {
         log.info("[Queue] 배치 처리 완료 - {}명 입장 허용", userIds.size());
     }
 
-    public void validateAndConsumeToken(Long userId) {
+    public void validateToken(Long userId) {
         Optional<String> token = orderQueueService.getToken(userId);
         if (token.isEmpty()) {
             throw new CoreException(ErrorType.FORBIDDEN, "입장 토큰이 없거나 만료되었습니다. 대기열을 통해 입장해주세요.");
         }
+    }
+
+    public void consumeToken(Long userId) {
         orderQueueService.removeToken(userId);
     }
 }
