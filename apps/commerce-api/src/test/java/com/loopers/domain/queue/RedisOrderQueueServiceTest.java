@@ -302,5 +302,20 @@ class RedisOrderQueueServiceTest {
             // assert
             assertThat(result).isEmpty();
         }
+
+        @DisplayName("TTL이 지나면 토큰이 자동 만료되어 조회할 수 없다.")
+        @Test
+        void token_expiresAfterTtl() throws InterruptedException {
+            // arrange — TTL 2초로 발급
+            Long userId = 1L;
+            orderQueueService.issueToken(userId, "short-lived-token", 2L);
+            assertThat(orderQueueService.getToken(userId)).isPresent();
+
+            // act — 3초 대기하여 TTL 만료
+            Thread.sleep(3000);
+
+            // assert
+            assertThat(orderQueueService.getToken(userId)).isEmpty();
+        }
     }
 }
