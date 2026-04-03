@@ -12,6 +12,10 @@ import org.springframework.context.annotation.Import;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -61,6 +65,81 @@ class RedisOrderQueueServiceTest {
 
             // assert
             assertThat(result).isFalse();
+        }
+
+        @DisplayName("100명이 동시에 진입해도 각각 1번만 등록된다.")
+        @Test
+        void enqueue_concurrent_noDuplicate() throws InterruptedException {
+            // arrange
+            int threadCount = 100;
+            ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+            CountDownLatch ready = new CountDownLatch(threadCount);
+            CountDownLatch start = new CountDownLatch(1);
+            CountDownLatch done = new CountDownLatch(threadCount);
+            AtomicInteger successCount = new AtomicInteger(0);
+
+            // act — 100개 스레드가 동일 userId로 동시 진입 시도
+            for (int i = 0; i < threadCount; i++) {
+                executor.execute(() -> {
+                    ready.countDown();
+                    try {
+                        start.await();
+                        if (orderQueueService.enqueue(1L)) {
+                            successCount.incrementAndGet();
+                        }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    } finally {
+                        done.countDown();
+                    }
+                });
+            }
+            ready.await();
+            start.countDown();
+            done.await();
+            executor.shutdown();
+
+            // assert
+            assertThat(successCount.get()).isEqualTo(1);
+            assertThat(orderQueueService.getWaitingCount()).isEqualTo(1);
+        }
+
+        @DisplayName("100명이 서로 다른 userId로 동시 진입하면 100명 모두 등록된다.")
+        @Test
+        void enqueue_concurrent_differentUsers() throws InterruptedException {
+            // arrange
+            int threadCount = 100;
+            ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+            CountDownLatch ready = new CountDownLatch(threadCount);
+            CountDownLatch start = new CountDownLatch(1);
+            CountDownLatch done = new CountDownLatch(threadCount);
+            AtomicInteger successCount = new AtomicInteger(0);
+
+            // act — 100개 스레드가 각각 다른 userId로 동시 진입
+            for (int i = 0; i < threadCount; i++) {
+                long userId = i + 1;
+                executor.execute(() -> {
+                    ready.countDown();
+                    try {
+                        start.await();
+                        if (orderQueueService.enqueue(userId)) {
+                            successCount.incrementAndGet();
+                        }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    } finally {
+                        done.countDown();
+                    }
+                });
+            }
+            ready.await();
+            start.countDown();
+            done.await();
+            executor.shutdown();
+
+            // assert
+            assertThat(successCount.get()).isEqualTo(100);
+            assertThat(orderQueueService.getWaitingCount()).isEqualTo(100);
         }
 
         @DisplayName("먼저 진입한 사용자가 앞 순번을 가진다.")
