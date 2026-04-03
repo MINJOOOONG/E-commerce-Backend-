@@ -124,6 +124,61 @@ class QueueFacadeUnitTest {
             }
             assertThat(fakeQueueService.getWaitingCount()).isEqualTo(5);
         }
+
+        @DisplayName("BATCH_SIZE보다 많은 유저가 대기 중일 때, 1회 처리 후 초과분은 대기열에 남는다.")
+        @Test
+        void processQueue_exceedsBatchSize_remainsInQueue() {
+            // arrange — 30명 진입 (BATCH_SIZE=10의 3배)
+            int totalUsers = 30;
+            for (long i = 1; i <= totalUsers; i++) {
+                fakeQueueService.enqueue(i);
+            }
+
+            // act — processQueue 1회만 호출
+            queueFacade.processQueue();
+
+            // assert
+            // 1) 토큰 발급된 유저 == BATCH_SIZE(10)명
+            int tokenCount = 0;
+            for (long i = 1; i <= totalUsers; i++) {
+                if (fakeQueueService.getToken(i).isPresent()) {
+                    tokenCount++;
+                }
+            }
+            assertThat(tokenCount).isEqualTo(QueueFacade.BATCH_SIZE);
+
+            // 2) 대기열에 남은 유저 == 30 - 10 = 20명
+            assertThat(fakeQueueService.getWaitingCount()).isEqualTo(totalUsers - QueueFacade.BATCH_SIZE);
+
+            // 3) 앞쪽 10명만 토큰 보유, 뒤쪽 20명은 토큰 없음
+            for (long i = 1; i <= 10; i++) {
+                assertThat(fakeQueueService.getToken(i)).isPresent();
+            }
+            for (long i = 11; i <= 30; i++) {
+                assertThat(fakeQueueService.getToken(i)).isEmpty();
+            }
+        }
+
+        @DisplayName("BATCH_SIZE보다 많은 유저가 있을 때, processQueue를 반복하면 순차적으로 전원 처리된다.")
+        @Test
+        void processQueue_multipleRounds_drainsAll() {
+            // arrange — 25명 진입
+            int totalUsers = 25;
+            for (long i = 1; i <= totalUsers; i++) {
+                fakeQueueService.enqueue(i);
+            }
+
+            // act — 3회 호출 (10 + 10 + 5)
+            queueFacade.processQueue();
+            queueFacade.processQueue();
+            queueFacade.processQueue();
+
+            // assert — 전원 토큰 발급, 대기열 비어 있음
+            assertThat(fakeQueueService.getWaitingCount()).isEqualTo(0);
+            for (long i = 1; i <= totalUsers; i++) {
+                assertThat(fakeQueueService.getToken(i)).isPresent();
+            }
+        }
     }
 
     @DisplayName("토큰 검증 시, ")
