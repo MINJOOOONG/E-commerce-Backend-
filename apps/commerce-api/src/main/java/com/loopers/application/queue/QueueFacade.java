@@ -7,9 +7,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -74,18 +73,15 @@ public class QueueFacade {
     }
 
     public void processQueue() {
-        List<Long> userIds = orderQueueService.dequeue(BATCH_SIZE);
-        if (userIds.isEmpty()) {
+        Map<Long, String> issued = orderQueueService.dequeueAndIssueTokens(BATCH_SIZE, TOKEN_TTL_SECONDS);
+        if (issued.isEmpty()) {
             return;
         }
 
-        for (Long userId : userIds) {
-            String token = UUID.randomUUID().toString();
-            orderQueueService.issueToken(userId, token, TOKEN_TTL_SECONDS);
-            log.info("[Queue] 입장 토큰 발급 - userId={}, token={}", userId, token);
-        }
+        issued.forEach((userId, token) ->
+            log.info("[Queue] 입장 토큰 발급 - userId={}, token={}", userId, token));
 
-        log.info("[Queue] 배치 처리 완료 - {}명 입장 허용", userIds.size());
+        log.info("[Queue] 배치 처리 완료 - {}명 입장 허용", issued.size());
     }
 
     public void validateToken(Long userId) {

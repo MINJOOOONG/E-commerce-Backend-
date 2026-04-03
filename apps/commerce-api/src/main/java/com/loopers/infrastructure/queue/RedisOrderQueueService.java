@@ -5,12 +5,17 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -19,6 +24,33 @@ public class RedisOrderQueueService implements OrderQueueService {
 
     private static final String QUEUE_KEY = "order-queue:waiting";
     private static final String TOKEN_KEY_PREFIX = "entry-token:";
+
+    @SuppressWarnings("unchecked")
+    private static final DefaultRedisScript<List<String>> DEQUEUE_AND_ISSUE_SCRIPT;
+
+    static {
+        String lua = """
+                local queue_key = KEYS[1]
+                local count = tonumber(ARGV[1])
+                local ttl = tonumber(ARGV[2])
+                local token_prefix = ARGV[3]
+
+                local members = redis.call('ZPOPMIN', queue_key, count)
+
+                local result = {}
+                local idx = 0
+                for i = 1, #members, 2 do
+                    local userId = members[i]
+                    idx = idx + 1
+                    local token = ARGV[3 + idx]
+                    redis.call('SET', token_prefix .. userId, token, 'EX', ttl)
+                    result[#result + 1] = userId
+                    result[#result + 1] = token
+                end
+                return result
+                """;
+        DEQUEUE_AND_ISSUE_SCRIPT = new DefaultRedisScript<>(lua, (Class<List<String>>) (Class<?>) List.class);
+    }
 
     private final RedisTemplate<String, String> redisTemplate;
 
@@ -73,6 +105,41 @@ public class RedisOrderQueueService implements OrderQueueService {
             }
         }
         return userIds;
+    }
+
+    @Override
+    public Map<Long, String> dequeueAndIssueTokens(int count, long ttlSeconds) {
+        if (count <= 0) {
+            return Collections.emptyMap();
+        }
+
+        // UUID는 Redis Lua 내부에서 생성 불가(deterministic 제약) → Java에서 미리 생성
+        List<String> args = new ArrayList<>();
+        args.add(String.valueOf(count));
+        args.add(String.valueOf(ttlSeconds));
+        args.add(TOKEN_KEY_PREFIX);
+        for (int i = 0; i < count; i++) {
+            args.add(UUID.randomUUID().toString());
+        }
+
+        List<String> result = redisTemplate.execute(
+                DEQUEUE_AND_ISSUE_SCRIPT,
+                List.of(QUEUE_KEY),
+                (Object[]) args.toArray(new String[0])
+        );
+
+        if (result == null || result.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        // result = [userId1, token1, userId2, token2, ...]
+        Map<Long, String> issued = new LinkedHashMap<>();
+        for (int i = 0; i < result.size(); i += 2) {
+            Long userId = Long.parseLong(result.get(i));
+            String token = result.get(i + 1);
+            issued.put(userId, token);
+        }
+        return issued;
     }
 
     @Override

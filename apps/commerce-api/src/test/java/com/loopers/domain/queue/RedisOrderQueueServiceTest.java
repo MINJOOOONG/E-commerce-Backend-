@@ -11,6 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -224,6 +225,75 @@ class RedisOrderQueueServiceTest {
 
             // assert
             assertThat(count).isEqualTo(3);
+        }
+    }
+
+    @DisplayName("원자적 dequeue + 토큰 발급 시, ")
+    @Nested
+    class DequeueAndIssueTokens {
+
+        @DisplayName("N명을 꺼내고 각각 토큰을 발급한다.")
+        @Test
+        void dequeueAndIssueTokens_success() throws InterruptedException {
+            // arrange
+            orderQueueService.enqueue(1L);
+            Thread.sleep(1);
+            orderQueueService.enqueue(2L);
+            Thread.sleep(1);
+            orderQueueService.enqueue(3L);
+
+            // act
+            Map<Long, String> issued = orderQueueService.dequeueAndIssueTokens(2, 300L);
+
+            // assert
+            assertThat(issued).hasSize(2);
+            assertThat(issued).containsKeys(1L, 2L);
+            assertThat(orderQueueService.getToken(1L)).isPresent().hasValue(issued.get(1L));
+            assertThat(orderQueueService.getToken(2L)).isPresent().hasValue(issued.get(2L));
+            assertThat(orderQueueService.getWaitingCount()).isEqualTo(1);
+        }
+
+        @DisplayName("빈 대기열에서 호출하면 빈 Map을 반환한다.")
+        @Test
+        void dequeueAndIssueTokens_emptyQueue_returnsEmptyMap() {
+            // act
+            Map<Long, String> issued = orderQueueService.dequeueAndIssueTokens(5, 300L);
+
+            // assert
+            assertThat(issued).isEmpty();
+        }
+
+        @DisplayName("대기 인원이 count보다 적으면 있는 만큼만 처리한다.")
+        @Test
+        void dequeueAndIssueTokens_fewerThanCount() {
+            // arrange
+            orderQueueService.enqueue(1L);
+            orderQueueService.enqueue(2L);
+
+            // act
+            Map<Long, String> issued = orderQueueService.dequeueAndIssueTokens(10, 300L);
+
+            // assert
+            assertThat(issued).hasSize(2);
+            assertThat(orderQueueService.getWaitingCount()).isEqualTo(0);
+        }
+
+        @DisplayName("발급된 토큰은 TTL이 만료되면 조회할 수 없다.")
+        @Test
+        void dequeueAndIssueTokens_tokenExpiresAfterTtl() throws InterruptedException {
+            // arrange
+            orderQueueService.enqueue(1L);
+
+            // act — TTL 2초로 발급
+            Map<Long, String> issued = orderQueueService.dequeueAndIssueTokens(1, 2L);
+            assertThat(issued).hasSize(1);
+            assertThat(orderQueueService.getToken(1L)).isPresent();
+
+            // 3초 대기하여 TTL 만료
+            Thread.sleep(3000);
+
+            // assert
+            assertThat(orderQueueService.getToken(1L)).isEmpty();
         }
     }
 

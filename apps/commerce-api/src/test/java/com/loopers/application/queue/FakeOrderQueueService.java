@@ -3,10 +3,12 @@ package com.loopers.application.queue;
 import com.loopers.domain.queue.OrderQueueService;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -56,6 +58,21 @@ public class FakeOrderQueueService implements OrderQueueService {
             i++;
         }
         return result;
+    }
+
+    @Override
+    public Map<Long, String> dequeueAndIssueTokens(int count, long ttlSeconds) {
+        List<Long> dequeued = dequeue(count);
+        if (dequeued.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, String> issued = new LinkedHashMap<>();
+        for (Long userId : dequeued) {
+            String token = UUID.randomUUID().toString();
+            tokens.put(userId, token);
+            issued.put(userId, token);
+        }
+        return issued;
     }
 
     @Override
