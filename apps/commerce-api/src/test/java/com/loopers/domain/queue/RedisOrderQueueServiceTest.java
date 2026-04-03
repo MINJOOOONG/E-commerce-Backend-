@@ -142,6 +142,44 @@ class RedisOrderQueueServiceTest {
             assertThat(orderQueueService.getWaitingCount()).isEqualTo(100);
         }
 
+        @DisplayName("2000명이 서로 다른 userId로 동시 진입하면 2000명 모두 등록된다.")
+        @Test
+        void enqueue_concurrent_2000_differentUsers() throws InterruptedException {
+            // arrange
+            int threadCount = 2000;
+            ExecutorService executor = Executors.newFixedThreadPool(200);
+            CountDownLatch ready = new CountDownLatch(threadCount);
+            CountDownLatch start = new CountDownLatch(1);
+            CountDownLatch done = new CountDownLatch(threadCount);
+            AtomicInteger successCount = new AtomicInteger(0);
+
+            // act
+            for (int i = 0; i < threadCount; i++) {
+                long userId = i + 1;
+                executor.execute(() -> {
+                    ready.countDown();
+                    try {
+                        start.await();
+                        if (orderQueueService.enqueue(userId)) {
+                            successCount.incrementAndGet();
+                        }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    } finally {
+                        done.countDown();
+                    }
+                });
+            }
+            ready.await();
+            start.countDown();
+            done.await();
+            executor.shutdown();
+
+            // assert
+            assertThat(successCount.get()).isEqualTo(2000);
+            assertThat(orderQueueService.getWaitingCount()).isEqualTo(2000);
+        }
+
         @DisplayName("먼저 진입한 사용자가 앞 순번을 가진다.")
         @Test
         void enqueue_orderPreserved() throws InterruptedException {
