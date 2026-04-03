@@ -34,6 +34,11 @@ public class CouponTemplate extends BaseEntity {
         this.issuedCount = 0;
     }
 
+    // TODO: 실제 할인 정책 미구현 — 할인 필드(정액/정률) 확정 후 구현 필요
+    public long calculateDiscount(long totalPrice) {
+        return 0L;
+    }
+
     public void issue() {
         if (this.issuedCount >= this.totalQuantity) {
             throw new CoreException(ErrorType.CONFLICT, "쿠폰이 모두 소진되었습니다");
