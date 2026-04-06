@@ -1,5 +1,6 @@
 package com.loopers.application.order;
 
+import com.loopers.application.queue.QueueFacade;
 import com.loopers.domain.coupon.CouponTemplate;
 import com.loopers.domain.coupon.CouponTemplateRepository;
 import com.loopers.domain.coupon.UserCoupon;
@@ -29,6 +30,7 @@ public class OrderFacade {
     private final UserRepository userRepository;
     private final UserCouponRepository userCouponRepository;
     private final CouponTemplateRepository couponTemplateRepository;
+    private final QueueFacade queueFacade;
 
     @Transactional
     public OrderInfo createOrder(Long userId, List<OrderItemRequest> itemRequests) {
@@ -37,6 +39,9 @@ public class OrderFacade {
 
     @Transactional
     public OrderInfo createOrder(Long userId, Long couponId, List<OrderItemRequest> itemRequests) {
+        // 대기열 입장 토큰 검증 (토큰이 없거나 만료되면 FORBIDDEN 예외)
+        queueFacade.validateToken(userId);
+
         User user = userRepository.findByIdWithLock(userId)
             .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "사용자를 찾을 수 없습니다"));
 
@@ -83,7 +88,12 @@ public class OrderFacade {
         user.deductPoint(order.getFinalPrice());
         userRepository.save(user);
 
-        return OrderInfo.from(orderService.createOrder(order));
+        OrderInfo result = OrderInfo.from(orderService.createOrder(order));
+
+        // 주문 성공 후 토큰 삭제 (실패 시 토큰 유지 → 재시도 가능)
+        queueFacade.consumeToken(userId);
+
+        return result;
     }
 
     public record OrderItemRequest(Long productId, Integer quantity) {}
