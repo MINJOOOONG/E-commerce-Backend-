@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 
 @Slf4j
@@ -37,26 +38,46 @@ public class DailyMetricsSnapshotTasklet implements Tasklet {
 
     @Override
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) {
-        if (requestDate == null) {
-            throw new RuntimeException("requestDate is required");
-        }
+        validateRequestDate();
 
         String dateKey = requestDate.format(DATE_FORMAT);
         log.info("일간 스냅샷 배치 시작 - requestDate: {}, dateKey: {}", requestDate, dateKey);
 
         List<ProductScore> scores = rankingSnapshotRepository.getAllScores(dateKey);
-        log.info("Redis에서 조회된 상품 수: {}", scores.size());
+        log.info("Redis에서 조회된 항목 수: {}", scores.size());
 
         productMetricsRepository.deleteByMetricDate(requestDate);
 
         if (!scores.isEmpty()) {
-            List<ProductMetrics> metricsList = scores.stream()
-                    .map(ps -> new ProductMetrics(ps.productId(), requestDate, ps.score()))
-                    .toList();
-            productMetricsRepository.saveAll(metricsList);
-            log.info("product_metrics 적재 완료 - {} 건", metricsList.size());
+            List<ProductMetrics> metricsList = new ArrayList<>();
+            int skipCount = 0;
+
+            for (ProductScore ps : scores) {
+                if (ps.productId() == null) {
+                    log.warn("productId가 null인 항목 skip - score: {}", ps.score());
+                    skipCount++;
+                    continue;
+                }
+                metricsList.add(new ProductMetrics(ps.productId(), requestDate, ps.score()));
+            }
+
+            if (!metricsList.isEmpty()) {
+                productMetricsRepository.saveAll(metricsList);
+            }
+
+            contribution.incrementWriteCount(metricsList.size());
+            log.info("product_metrics 적재 완료 - 적재: {} 건, skip: {} 건", metricsList.size(), skipCount);
         }
 
         return RepeatStatus.FINISHED;
+    }
+
+    private void validateRequestDate() {
+        if (requestDate == null) {
+            throw new RuntimeException("requestDate is required");
+        }
+        if (requestDate.isAfter(LocalDate.now())) {
+            throw new RuntimeException("requestDate는 미래 날짜일 수 없습니다: " + requestDate);
+        }
     }
 }

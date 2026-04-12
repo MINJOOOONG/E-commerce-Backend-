@@ -21,9 +21,11 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.test.context.TestPropertySource;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertAll;
 
 @SpringBootTest
@@ -155,6 +157,59 @@ class DailyMetricsSnapshotJobE2ETest {
             assertAll(
                 () -> assertThat(metrics).hasSize(1),
                 () -> assertThat(metrics.get(0).getScore()).isEqualTo(200.0)
+            );
+        }
+
+        @DisplayName("미래 날짜의 requestDate가 주어지면 배치가 실패한다.")
+        @Test
+        void failsWithFutureRequestDate() throws Exception {
+            // arrange
+            jobLauncherTestUtils.setJob(job);
+
+            LocalDate futureDate = LocalDate.now().plusDays(1);
+            var jobParameters = new JobParametersBuilder()
+                    .addLocalDate("requestDate", futureDate)
+                    .addLong("run.id", 300L)
+                    .toJobParameters();
+
+            // act
+            var jobExecution = jobLauncherTestUtils.launchJob(jobParameters);
+
+            // assert
+            assertThat(jobExecution.getExitStatus().getExitCode())
+                    .isEqualTo(ExitStatus.FAILED.getExitCode());
+        }
+
+        @DisplayName("Redis에 파싱 불가능한 value가 섞여 있으면 정상 데이터만 적재된다.")
+        @Test
+        void skipsInvalidRedisValues() throws Exception {
+            // arrange
+            jobLauncherTestUtils.setJob(job);
+
+            String dateKey = "20260410";
+            String redisKey = KEY_PREFIX + dateKey;
+            redisTemplate.opsForZSet().add(redisKey, "1", 100.0);
+            redisTemplate.opsForZSet().add(redisKey, "abc", 50.0);
+            redisTemplate.opsForZSet().add(redisKey, "3", 200.0);
+
+            var jobParameters = new JobParametersBuilder()
+                    .addLocalDate("requestDate", LocalDate.of(2026, 4, 10))
+                    .addLong("run.id", 400L)
+                    .toJobParameters();
+
+            // act
+            var jobExecution = jobLauncherTestUtils.launchJob(jobParameters);
+
+            // assert
+            assertThat(jobExecution.getExitStatus().getExitCode())
+                    .isEqualTo(ExitStatus.COMPLETED.getExitCode());
+
+            List<ProductMetrics> metrics = productMetricsJpaRepository.findAll();
+            assertAll(
+                () -> assertThat(metrics).hasSize(2),
+                () -> assertThat(metrics)
+                        .extracting(ProductMetrics::getProductId)
+                        .containsExactlyInAnyOrder(1L, 3L)
             );
         }
 

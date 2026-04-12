@@ -36,5 +36,19 @@ public class ProductMetrics extends BaseEntity {
         this.productId = productId;
         this.metricDate = metricDate;
         this.score = score;
+        guard();
+    }
+
+    @Override
+    protected void guard() {
+        if (productId == null) {
+            throw new IllegalArgumentException("productId는 null일 수 없습니다");
+        }
+        if (metricDate == null) {
+            throw new IllegalArgumentException("metricDate는 null일 수 없습니다");
+        }
+        if (score < 0) {
+            throw new IllegalArgumentException("score는 0 이상이어야 합니다");
+        }
     }
 }
