@@ -213,9 +213,49 @@ class DailyMetricsSnapshotJobE2ETest {
             );
         }
 
-        @DisplayName("Redis에 해당 날짜 데이터가 없으면 빈 결과로 정상 완료된다.")
+        @DisplayName("Redis에 해당 날짜 데이터가 없으면 기존 DB 데이터를 삭제하지 않고 정상 완료된다.")
         @Test
-        void completesWithEmptyRedisData() throws Exception {
+        void preservesExistingDataWhenRedisEmpty() throws Exception {
+            // arrange
+            jobLauncherTestUtils.setJob(job);
+
+            // 기존 데이터를 먼저 적재
+            String dateKey = "20260412";
+            String redisKey = KEY_PREFIX + dateKey;
+            LocalDate metricDate = LocalDate.of(2026, 4, 12);
+
+            redisTemplate.opsForZSet().add(redisKey, "1", 100.0);
+            var seedParams = new JobParametersBuilder()
+                    .addLocalDate("requestDate", metricDate)
+                    .addLong("run.id", 500L)
+                    .toJobParameters();
+            jobLauncherTestUtils.launchJob(seedParams);
+
+            assertThat(productMetricsJpaRepository.findByMetricDate(metricDate)).hasSize(1);
+
+            // Redis 데이터 삭제 → 빈 상태로 만듦
+            redisTemplate.delete(redisKey);
+
+            // act — Redis 비어 있는 상태에서 재실행
+            var jobParameters = new JobParametersBuilder()
+                    .addLocalDate("requestDate", metricDate)
+                    .addLong("run.id", 501L)
+                    .toJobParameters();
+            var jobExecution = jobLauncherTestUtils.launchJob(jobParameters);
+
+            // assert — 기존 데이터가 보전되어야 한다
+            assertAll(
+                () -> assertThat(jobExecution.getExitStatus().getExitCode())
+                        .isEqualTo(ExitStatus.COMPLETED.getExitCode()),
+                () -> assertThat(productMetricsJpaRepository.findByMetricDate(metricDate)).hasSize(1),
+                () -> assertThat(productMetricsJpaRepository.findByMetricDate(metricDate).get(0).getScore())
+                        .isEqualTo(100.0)
+            );
+        }
+
+        @DisplayName("Redis에 해당 날짜 데이터가 없고 DB에도 없으면 빈 결과로 정상 완료된다.")
+        @Test
+        void completesWithEmptyRedisAndEmptyDb() throws Exception {
             // arrange
             jobLauncherTestUtils.setJob(job);
 
